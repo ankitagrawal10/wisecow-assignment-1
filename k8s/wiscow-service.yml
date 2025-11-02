@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wiscow
+  namespace: wiscow-app
+spec:
+  selector:
+    app: wiscow
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 4489
+  type: ClusterIP

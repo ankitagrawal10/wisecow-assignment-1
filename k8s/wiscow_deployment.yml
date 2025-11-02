@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wiscow-deployment
+  namespace: wiscow-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wiscow
+
+  template:
+    metadata:
+      name: wiscow
+      labels:
+        app: wiscow
+    spec:
+      containers:
+        - name: wiscow
+          image: ankit998/wiscow:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4499
+
