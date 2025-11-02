@@ -1,0 +1,76 @@
+name: CI-CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  IMAGE_NAME: wisecow
+  REGISTRY: docker.io
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Docker Image
+        run: |
+          docker build -t $DOCKERHUB_USERNAME/$IMAGE_NAME:latest .
+
+      - name: Push Docker Image
+        run: |
+          docker push $DOCKERHUB_USERNAME/$IMAGE_NAME:latest
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Kubeconfig
+        run: |
+          echo "${KUBE_CONFIG_DATA}" | base64 --decode > kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+
+      - name: Install kubectl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y kubectl
+          
+      - name: Deploy to Kubernetes
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          # Update image in deployment file
+          sed -i "s|image:.*|image: ${DOCKERHUB_USERNAME}/wisecow:latest|g" k8s/wiscow_deployment.yml
+
+          # Apply namespace (ignore error if exists)
+          kubectl apply -f k8s/namespace.yml || true
+
+          # Deploy app
+          kubectl apply -f k8s/wiscow_deployment.yml
+          kubectl apply -f k8s/wiscow-service.yml
+
+      - name: Verify Deployment
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl get pods -n wiscow-app
